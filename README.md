@@ -48,7 +48,7 @@ Stage percentiles are marginal distributions. They do not sum to the TTFA percen
 because the worst turn for one stage is not the worst turn for another. Shares are computed
 at P50 only.
 
-### Three things that surprised me
+### Four things that surprised me
 
 **1. `transcription_delay` varies 7x on one speaker in one session** (0.211s to 1.515s),
 at a fixed `endpointing_ms=25`. It is the first stage of the budget, almost nobody tunes it,
@@ -57,6 +57,8 @@ provider's finalisation decision, not the decision. The 1.7.0 session showed the
 at 4x, so the instability reproduces and its magnitude does not.
 
 **2. The turn detector is acoustic, and near-identical utterances get opposite decisions.**
+Measured on 1.7.0 and not re-run on 1.8.0, because `EOTInferenceMetrics` carries no
+`speech_id` and so is not captured by the harness.
 
 | Utterance | P(end of turn) | Decision |
 |---|---|---|
