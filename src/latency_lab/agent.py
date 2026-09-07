@@ -1,3 +1,5 @@
+import time
+
 from correlator import TurnCorrelator
 from dotenv import load_dotenv
 from livekit import agents
@@ -19,6 +21,7 @@ from livekit.agents.voice.events import (
     SpeechCreatedEvent,  # .user_initiated: bool, .source: 'say'|'generate_reply',
 )
 from livekit.plugins import cartesia, deepgram, google, silero
+from sink import JsonlMetricSink
 
 load_dotenv(".env.local")
 
@@ -102,7 +105,13 @@ async def entrypoint(ctx: JobContext) -> None:
 
     # One correlator per session. Not module-level: AgentServer forks a process per
     # session today, but relying on that is how you get cross-session bleed later.
-    correlator = TurnCorrelator()
+    #
+    # llm_timeout is the per-attempt APIConnectOptions.timeout this LLM is actually running
+    # with. google.LLM takes DEFAULT_API_CONNECT_OPTIONS, which is timeout=10.0. Passing it
+    # lets the correlator separate a retry from a slow model: a single attempt cannot exceed
+    # its own timeout, so ttft above it means at least one attempt timed out. Change this if
+    # you pass conn_options above, and drop it entirely if you stop being sure.
+    correlator = TurnCorrelator(llm_timeout=10.0)
 
     # --- Stream A: raw per-component metrics. DEPRECATED, goes at SDK 2.0.
     # Keep it as a sidecar, not as the source of truth. It is the only place you get
@@ -110,8 +119,14 @@ async def entrypoint(ctx: JobContext) -> None:
     # characters_count (session_usage_updated has those only cumulatively). It is also
     # the only stream where EOU/LLM/TTS share one speech_id, which makes it the easier
     # join. Delete this handler when 2.0 lands; the correlator should still work.
+    # Persist every raw fragment before correlating it, so a published table can be
+    # re-derived months later without re-running the session. Not print(): console mode owns
+    # stdout and swallows it, which is how the 7 Sep run lost all of its timings.
+    sink = JsonlMetricSink(f"data/metrics/{time.strftime('%Y%m%d-%H%M%S')}.jsonl")
+
     @session.on("metrics_collected")
     def _on_metrics(ev: MetricsCollectedEvent) -> None:
+        sink.write(ev.metrics)
         correlator.on_metric(ev.metrics)
 
     # --- Stream B: speech lifecycle. Tells you deterministically whether a speech was
@@ -151,6 +166,8 @@ async def entrypoint(ctx: JobContext) -> None:
             print(f"{usage.provider}/{usage.model}: {usage}")
 
     async def _flush(*_):
+        sink.close()
+        print(f"[correlator] raw fragments written to {sink.path} ({sink.written})")
         correlator.flush_incomplete()
     ctx.add_shutdown_callback(_flush)
 

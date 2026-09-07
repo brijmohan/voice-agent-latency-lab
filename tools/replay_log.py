@@ -5,8 +5,10 @@ the M2 handler, rebuilds real metric objects, and feeds them to TurnCorrelator i
 order they appeared.
 
     python tools/replay_log.py data/logs/20260824-154309-M2.log [--scramble]
+    python tools/replay_log.py <log> --llm-timeout 10.0   # enable retry inference
 """
 
+import json
 import random
 import re
 import sys
@@ -30,8 +32,29 @@ def _field(line, key, cast=float):
     return cast(raw)
 
 
+_CLASSES = {"EOUMetrics": EOUMetrics, "LLMMetrics": LLMMetrics, "TTSMetrics": TTSMetrics}
+
+
+def parse_jsonl(path):
+    """Return metric objects from a JsonlMetricSink capture, in write order.
+
+    Preferred over parse(). The regex reader below returns None for any field whose repr
+    changed between SDK versions, and a field that silently becomes None in a latency table
+    is worse than one that fails loudly.
+    """
+    out = []
+    for line in Path(path).read_text().splitlines():
+        if not line.strip():
+            continue
+        payload = json.loads(line)
+        cls = _CLASSES.get(payload.pop("kind", None))
+        if cls is not None:
+            out.append(cls(**payload))
+    return out
+
+
 def parse(path):
-    """Return metric objects in the order they were emitted."""
+    """Return metric objects in the order they were emitted. Legacy console-text logs."""
     out = []
     for line in ANSI.sub("", Path(path).read_text(errors="ignore")).splitlines():
         if line.startswith("EOUMetrics "):
@@ -80,9 +103,20 @@ def parse(path):
     return out
 
 
+def _llm_timeout_arg():
+    """The per-attempt APIConnectOptions.timeout the session ran with, if you know it.
+
+    Off by default. A ttft above it proves at least one attempt timed out, but only if the
+    value actually matches what the deployment configured, so it is never assumed.
+    """
+    if "--llm-timeout" not in sys.argv:
+        return None
+    return float(sys.argv[sys.argv.index("--llm-timeout") + 1])
+
+
 def main():
     path = sys.argv[1]
-    metrics = parse(path)
+    metrics = parse_jsonl(path) if path.endswith(".jsonl") else parse(path)
 
     if "--scramble" in sys.argv:
         # Correctness must not depend on arrival order. Shuffle within a window so
@@ -90,7 +124,7 @@ def main():
         random.seed(0)
         random.shuffle(metrics)
 
-    c = TurnCorrelator()
+    c = TurnCorrelator(llm_timeout=_llm_timeout_arg())
     for m in metrics:
         c.on_metric(m)
 
