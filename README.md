@@ -109,6 +109,19 @@ Six things break the naive join, all observed in a two-minute conversation:
    `speech_id`s, none cancelled: the LLM is dispatched speculatively on partial transcripts
    and 9 generations were discarded. Roughly 2x the LLM calls, and the bill.
 
+## The scenario
+
+A narrow slot-filling task: booking a civil ceremony at a fictional city hall, with a fixed
+list of available slots. Deliberately not a general assistant. A fixed script against a
+bounded task is what makes turns comparable between runs; an open-domain agent produces
+conversations of varying length and shape and the comparison stops meaning anything.
+
+The prompt is written for voice, not chat: no markdown, no lists, no symbols, because every
+character is spoken. An earlier version carried the voice-realism sections from the LiveKit
+prompting guide, which emit SSML `<break>` tags into the text stream. Those appeared in 100%
+of assistant turns, land in `TTSMetrics.characters_count`, and add real audio if the
+provider honours them. Removed, because they contaminate the thing being measured.
+
 ## Run it
 
 ```bash
@@ -123,8 +136,9 @@ uv run python tools/replay_log.py <logfile>
 
 - P90 at n≥100 per configuration, which needs an automated caller.
 - The same decomposition against a second architecture that shares no event model.
-- French. English STT transcribed "Lambersart" as "Dolombasa" and "mairie" as "Mary",
-  which is fine for measurement and disqualifying for anything else.
+- French. English STT mangles French proper nouns badly enough that the same agent is
+  unusable for a francophone caller, which is fine for measurement and disqualifying for
+  anything else. Quantifying that delta is its own result.
 
 ## Corrections
 
