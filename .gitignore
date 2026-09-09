@@ -9,3 +9,7 @@ data/
 *.jsonl
 *.log
 .DS_Store
+
+# Wire capture fixtures are committed on purpose: five real sessions with the base64 audio
+# blanked, 88 KB, so a fresh clone can run the regression tests without the 19 MB corpus.
+!tests/fixtures/wire/*.jsonl
