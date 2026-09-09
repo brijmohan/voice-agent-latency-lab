@@ -120,7 +120,7 @@ event on arrival.
 The findings that do not appear in any total: **endpointing is the one stage the wire cannot
 see**, because `speech_stopped` is emitted after the decision is already made;
 `response.created` fires when the LLM *finishes*, so the wire cannot yield time-to-first-token
-at any anchor; the endpointer held on **136 of 280 decisions** and each hold costs about
+at any anchor; the endpointer held on **135 of 275 decisions** and each hold costs about
 600ms; and **61% of turns arrive as more than one speech segment**, each revision restating
 the whole utterance and costing LLM work that is then superseded.
 
