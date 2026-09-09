@@ -1,7 +1,16 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.svg">
+  <img alt="apresvous: measuring when a voice agent decides it is your turn. Median time to first audio 1.577 seconds over 115 turns." src="docs/banner-light.svg" width="100%">
+</picture>
+
 # voice-agent-latency-lab
 
 **Where the 800ms goes in a cascaded voice agent, decomposed into four stages and reported
 at the tail.**
+
+The wire-level half of this repository is **`apresvous`**, after the phrase for yielding a
+turn that a voice agent never says. The banner draws what it measures: the caller stops, and
+the bracket is how long they wait. Both numbers on it are measured, not illustrative.
 
 A caller finishes a sentence and waits. This measures that wait, splits it into the four
 stages that produce it, and reports the distribution rather than the average.
