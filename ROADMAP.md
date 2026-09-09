@@ -33,21 +33,28 @@ LiveKit Agents, one cascaded pipeline, measured and reported at the tail.
 - [x] `CORRECTIONS.md`, recording claims made here that turned out to be wrong.
 - [x] A stated list of what this does not measure.
 
-## v0.2  A second stack
+## v0.2  A second stack  (Shipped 9 Sep 2026)
 
-Apply the same decomposition to `huggingface/speech-to-speech`, which has a different event
-model and no shared turn key.
+`huggingface/speech-to-speech` v1.0.0, measured from **outside the process** over the
+Realtime API it already exposes. Results in [REPORT-speech-to-speech.md](REPORT-speech-to-speech.md).
 
-- [ ] Adapter that takes a running stack as a target rather than vendoring it. The harness
-      must not own the systems it measures, so no submodule and no fork dependency.
-- [ ] Pin the upstream commit in the README so a reported number can be reproduced.
-- [ ] Publish both decompositions side by side.
+- [x] Adapter that takes a running stack as a target rather than vendoring it. No fork, no
+      patch, no submodule. The harness connects to a URL.
+- [x] Upstream commit pinned (`16d7f98`, v1.0.0) so a number can be reproduced.
+- [x] A recorded human corpus, replayed, so n = 115 and P99 is reportable for the first time.
+- [ ] ~~Publish both decompositions side by side.~~ **Deliberately not done.**
 
-**Not a league table.** The contribution is a method. The moment this reads as "my benchmark
-says stack X is faster", the methodology is worth nothing and the numbers get argued about
-instead of used.
+**Why the side-by-side was dropped.** The LiveKit half runs three cloud APIs from Lille; the
+second stack runs fully local on a laptop. A shared table would be read as a statement about
+architecture when it is dominated by cloud versus local. The method survives that; a league
+table does not, and the moment this reads as "my benchmark says X is faster" the methodology
+is worth nothing.
 
-**Acceptance:** the same four stages are reported for both stacks, and every stage that
+What replaced it is better: the two halves measure from **different vantage points**, one
+inside the framework's event stream and one on the wire, and the finding is what each can and
+cannot see. Endpointing is invisible from outside. Transport is invisible from inside.
+
+**Acceptance, met:** the same four stages are reported for both stacks, and every stage that
 cannot be measured on one of them is named as unmeasured rather than estimated.
 
 ## v0.3  Calibration for a real deployment
@@ -76,10 +83,23 @@ TTS. A method that only works if you have the private audio is not a contributio
 
 ## v0.4  Latency as a regression gate
 
-- [ ] Run the harness in CI over the synthetic set.
+- [ ] Run the harness in CI over the committed fixtures.
 - [ ] Fail the build when P50 TTFA regresses past a stated budget.
 
-A latency budget that is written down but not enforced is a comment.
+A latency budget that is written down but not enforced is a comment. See
+[docs/TESTING.md](docs/TESTING.md) for what the suite covers today and what it does not.
+
+## v0.5  Measured against something other than itself
+
+This repo currently benchmarks nothing but itself, which is a real limit on what any number
+here means.
+
+- [ ] Full-Duplex-Bench v1.5 (arXiv 2507.23159) as an external reference.
+- [ ] HumDial (ICASSP 2026), which is real human dual-channel conversation rather than
+      synthesised dialogue.
+
+Both are what the field actually cross-references. Adopting them is how these measurements
+stop being self-referential.
 
 ---
 

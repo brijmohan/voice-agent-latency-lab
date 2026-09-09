@@ -108,6 +108,30 @@ checked, and it is on the roadmap.
 
 ---
 
+## The second stack, measured on the wire
+
+`huggingface/speech-to-speech` v1.0.0, fully local on the same laptop, measured from outside
+the process over the Realtime API it already exposes. No fork and no patch: the harness is an
+external WebSocket client that streams recorded human speech and timestamps every server
+event on arrival.
+
+**n = 115 turns. TTFA P50 1.577s, P90 2.298s, P99 3.192s.**
+
+The findings that do not appear in any total: **endpointing is the one stage the wire cannot
+see**, because `speech_stopped` is emitted after the decision is already made;
+`response.created` fires when the LLM *finishes*, so the wire cannot yield time-to-first-token
+at any anchor; the endpointer held on **136 of 280 decisions** and each hold costs about
+600ms; and **61% of turns arrive as more than one speech segment**, each revision restating
+the whole utterance and costing LLM work that is then superseded.
+
+Full write-up in [REPORT-speech-to-speech.md](REPORT-speech-to-speech.md).
+
+**There is no comparison table between the two stacks, on purpose.** One runs three cloud
+APIs, the other runs fully local on a laptop. That difference dominates any total, so a
+shared table would say something about hosting while appearing to say something about
+architecture. The two halves measure from different vantage points and the contribution is
+what each one cannot see.
+
 ## Honest limits
 
 What this does **not** measure, which is what makes the rest worth reading:
@@ -172,7 +196,7 @@ provider honours them. Removed, because they contaminate the thing being measure
 uv sync
 cp .env.example .env.local          # fill in your keys
 uv run python src/latency_lab/agent.py console
-uv run pytest                        # 24 tests
+uv run pytest                        # 51 tests, see docs/TESTING.md
 uv run python tools/replay_log.py <logfile>
 ```
 
