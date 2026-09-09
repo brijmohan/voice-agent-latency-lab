@@ -129,3 +129,11 @@ endpointing is measured under the same conditions for every utterance.
 
 Nothing here contains a real name, a real address, a real phone number or a client name.
 Keep it that way if you add utterances.
+
+---
+
+## Part two
+
+Blocks G, H and I, covering tool calling and contact fidelity, are in
+[recording-script-tools.md](recording-script-tools.md). Record them with the same
+microphone, room and distance, or blocks A to F stop being a control.
