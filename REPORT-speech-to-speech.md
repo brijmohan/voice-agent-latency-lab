@@ -366,9 +366,9 @@ implementing the same protocol.
 
 ```bash
 speech-to-speech serve --mac-optimal-settings --host 127.0.0.1 --port 8765
-python tools/prep_recordings.py recordings/raw recordings/wav
-python tools/capture_corpus.py recordings/wav captures --repeats 5
-python tools/wire_report.py captures
+apresvous prep recordings/raw recordings/wav
+apresvous capture recordings/wav captures --repeats 5
+apresvous report captures
 ```
 
 The recording protocol is in `docs/recording-script.md`, correlation semantics in

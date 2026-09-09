@@ -204,7 +204,7 @@ provider honours them. Removed, because they contaminate the thing being measure
 ```bash
 uv sync
 cp .env.example .env.local          # fill in your keys
-uv run python src/latency_lab/agent.py console
+uv run python src/apresvous/agent.py console
 uv run pytest                        # 51 tests, see docs/TESTING.md
 uv run python tools/replay_log.py <logfile>
 ```

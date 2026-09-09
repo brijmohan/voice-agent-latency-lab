@@ -5,15 +5,11 @@ not depend on the order the fragments arrive in.
 """
 
 import itertools
-import sys
-from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "latency_lab"))
-
-from correlator import TurnCorrelator, TurnOutcome
 from livekit.agents.metrics import EOUMetrics, LLMMetrics, TTSMetrics
+
+from apresvous.correlator import TurnCorrelator, TurnOutcome
 
 
 def eou(speech_id, delay=0.578, transcription=0.361):

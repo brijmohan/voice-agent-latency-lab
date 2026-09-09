@@ -6,7 +6,7 @@ currently fail. Make them pass.
 
 ## Input
 
-The JSONL that `capture_corpus.py` writes. Line 1 is `_capture.meta`; every other line is
+The JSONL that `apresvous capture` writes. Line 1 is `_capture.meta`; every other line is
 
 ```json
 {"t": 3.351, "type": "response.created", "event": { ...raw protocol event... }}

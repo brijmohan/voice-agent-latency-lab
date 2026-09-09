@@ -1,13 +1,12 @@
 """Unit tests for the recording preparation step.
 
-This is the layer where a silent bug does the most damage. `prep_recordings` decides where
+This is the layer where a silent bug does the most damage. `apresvous.prep` decides where
 speech starts and ends, and every downstream latency number is measured from a boundary it
 chose. Trimming 50ms too much shifts every TTFA in the corpus by 50ms and nothing else in
 the pipeline would notice.
 """
 
 import math
-import sys
 import wave
 from array import array
 from pathlib import Path
@@ -15,9 +14,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "tools"))
 
-from prep_recordings import RATE, THRESH_DBFS, speech_bounds
+from apresvous.prep import RATE, THRESH_DBFS, speech_bounds
 
 
 def tone(seconds, dbfs=-6.0, freq=220.0):

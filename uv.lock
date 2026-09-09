@@ -170,6 +170,50 @@ wheels = [
 ]
 
 [[package]]
+name = "apresvous"
+version = "0.2.0"
+source = { editable = "." }
+dependencies = [
+    { name = "websockets" },
+]
+
+[package.optional-dependencies]
+livekit = [
+    { name = "livekit-agents" },
+    { name = "livekit-plugins-cartesia" },
+    { name = "livekit-plugins-deepgram" },
+    { name = "livekit-plugins-google" },
+    { name = "livekit-plugins-silero" },
+    { name = "livekit-plugins-turn-detector" },
+    { name = "python-dotenv" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "livekit-agents", marker = "extra == 'livekit'", specifier = ">=1.7.0" },
+    { name = "livekit-plugins-cartesia", marker = "extra == 'livekit'", specifier = ">=1.7.0" },
+    { name = "livekit-plugins-deepgram", marker = "extra == 'livekit'", specifier = ">=1.7.0" },
+    { name = "livekit-plugins-google", marker = "extra == 'livekit'", specifier = ">=1.7.0" },
+    { name = "livekit-plugins-silero", marker = "extra == 'livekit'", specifier = ">=1.7.0" },
+    { name = "livekit-plugins-turn-detector", marker = "extra == 'livekit'", specifier = ">=1.7.0" },
+    { name = "python-dotenv", marker = "extra == 'livekit'", specifier = ">=1.2.3" },
+    { name = "websockets", specifier = ">=13" },
+]
+provides-extras = ["livekit"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8" },
+    { name = "ruff" },
+]
+
+[[package]]
 name = "attrs"
 version = "26.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2351,45 +2395,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/53/0c/06f8b233b8fd13b9e5ee11424ef85419ba0d8ba0b3138bf360be2ff56953/urllib3-2.7.0.tar.gz", hash = "sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c", size = 433602, upload-time = "2026-05-07T16:13:18.596Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/3e/5db95bcf282c52709639744ca2a8b149baccf648e39c8cc87553df9eae0c/urllib3-2.7.0-py3-none-any.whl", hash = "sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897", size = 131087, upload-time = "2026-05-07T16:13:17.151Z" },
-]
-
-[[package]]
-name = "voice-agent-latency-lab"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "httpx" },
-    { name = "livekit-agents" },
-    { name = "livekit-plugins-cartesia" },
-    { name = "livekit-plugins-deepgram" },
-    { name = "livekit-plugins-google" },
-    { name = "livekit-plugins-silero" },
-    { name = "livekit-plugins-turn-detector" },
-    { name = "python-dotenv" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx" },
-    { name = "livekit-agents", specifier = ">=1.7.0" },
-    { name = "livekit-plugins-cartesia", specifier = ">=1.7.0" },
-    { name = "livekit-plugins-deepgram", specifier = ">=1.7.0" },
-    { name = "livekit-plugins-google", specifier = ">=1.7.0" },
-    { name = "livekit-plugins-silero", specifier = ">=1.7.0" },
-    { name = "livekit-plugins-turn-detector", specifier = ">=1.7.0" },
-    { name = "python-dotenv", specifier = ">=1.2.3" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8" },
-    { name = "ruff" },
 ]
 
 [[package]]

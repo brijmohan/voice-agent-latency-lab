@@ -1,6 +1,6 @@
 """Convert QuickTime takes into a byte-identical replay corpus.
 
-    python prep_recordings.py recordings/raw recordings/wav
+    apresvous prep recordings/raw recordings/wav
 
 Every file becomes 16 kHz mono PCM16 with an identical 300ms lead and its trailing silence
 removed. The capture client appends its own fixed tail, so endpointing is measured under the

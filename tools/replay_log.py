@@ -14,10 +14,11 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "latency_lab"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from correlator import TurnCorrelator
 from livekit.agents.metrics import EOUMetrics, LLMMetrics, TTSMetrics
+
+from apresvous.correlator import TurnCorrelator
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 

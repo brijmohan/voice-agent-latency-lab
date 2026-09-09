@@ -33,7 +33,7 @@ Launch:
 
 ```bash
 LOG=data/logs/$(date +%Y%m%d-%H%M%S)-runA-v1.8.0.log
-script -q "$LOG" .venv/bin/python src/latency_lab/agent.py console
+script -q "$LOG" .venv/bin/python src/apresvous/agent.py console
 ```
 
 `script` rather than `tee`, because console mode needs a real TTY. End with **Ctrl+C**,
@@ -95,7 +95,7 @@ discarded.
 
 ```bash
 LOG=data/logs/$(date +%Y%m%d-%H%M%S)-runB-v1.8.0.log
-script -q "$LOG" .venv/bin/python src/latency_lab/agent.py console
+script -q "$LOG" .venv/bin/python src/apresvous/agent.py console
 ```
 
 | # | Do this | Targets |

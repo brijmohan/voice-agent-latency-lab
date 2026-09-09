@@ -1,5 +1,5 @@
 # Known issues, before any of this is published
-*8 Sep 2026. `wire_correlator.py` passes 10 tests plus 1 xfail over 115 real captures.*
+*8 Sep 2026. `apresvous/wire_correlator.py` passes 10 tests plus 1 xfail over 115 real captures.*
 
 Ordered by what would embarrass you first.
 
@@ -70,7 +70,7 @@ Ordered by what would embarrass you first.
 
 16. **No README.** A reader landing on this directory has no entry point.
 
-17. **No CLI.** `wire_correlator.py` is importable and there is no way to run it over a
+17. **No CLI.** `apresvous/wire_correlator.py` is importable and there is no way to run it over a
     directory and get a table without writing a script.
 
 18. **Not yet in the public repo.** Moving it into `voice-agent-latency-lab` as v0.2 is a

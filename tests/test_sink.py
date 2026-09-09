@@ -5,14 +5,13 @@ lost. Its one job is that what went in can be read back out.
 """
 
 import json
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "latency_lab"))
 
 from livekit.agents.metrics import EOUMetrics, LLMMetrics, STTMetrics
-from sink import JsonlMetricSink
+
+from apresvous.sink import JsonlMetricSink
 
 
 def eou(speech_id="s1", delay=0.578):

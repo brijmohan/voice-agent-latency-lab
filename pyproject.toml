@@ -1,11 +1,30 @@
 [project]
-name = "voice-agent-latency-lab"
-version = "0.1.0"
-description = "Per-turn latency decomposition for a cascaded voice agent, reported at the tail"
+name = "apresvous"
+version = "0.2.0"
+description = "Measure when a voice agent decides it is your turn, from outside the process"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
-dependencies = [
+authors = [{ name = "Brij Mohan Lal Srivastava" }]
+keywords = ["voice-agents", "latency", "turn-taking", "endpointing", "speech", "realtime"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Scientific/Engineering",
+]
+
+# Deliberately small. The wire harness needs one dependency, so re-analysing captures or
+# measuring any Realtime-compatible server does not drag in the systems being measured.
+dependencies = ["websockets>=13"]
+
+[project.optional-dependencies]
+# The LiveKit half: the in-framework correlator and the reference agent.
+livekit = [
     "livekit-agents>=1.7.0",
     "livekit-plugins-deepgram>=1.7.0",
     "livekit-plugins-cartesia>=1.7.0",
@@ -13,8 +32,14 @@ dependencies = [
     "livekit-plugins-silero>=1.7.0",
     "livekit-plugins-turn-detector>=1.7.0",
     "python-dotenv>=1.2.3",
-    "httpx",
 ]
+
+[project.scripts]
+apresvous = "apresvous.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/brijmohan/voice-agent-latency-lab"
+Source = "https://github.com/brijmohan/voice-agent-latency-lab"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff"]
@@ -30,4 +55,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/latency_lab"]
+packages = ["src/apresvous"]

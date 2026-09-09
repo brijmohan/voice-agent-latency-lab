@@ -38,7 +38,7 @@ makes a latency table look good.
 
 ## What is deliberately not covered
 
-**Integration against a live server.** `capture_corpus.py` is exercised only by hand. Testing
+**Integration against a live server.** `apresvous capture` is exercised only by hand. Testing
 it needs `speech-to-speech serve` running with several GB of models loaded, which does not
 belong in a unit suite. It is covered by the manual protocol in `SMOKE-TEST.md` instead, and
 that protocol has caught two real bugs that unit tests did not: console mode swallowing

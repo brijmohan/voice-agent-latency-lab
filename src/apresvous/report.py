@@ -1,9 +1,9 @@
 """Print the latency table for a directory of wire captures.
 
-    python tools/wire_report.py <dir> [--csv out.csv]
+    apresvous report <dir> [--csv out.csv]
 
-Reporting only. Every number here comes from `wire_correlator.correlate`; this file decides
-nothing about what a turn is.
+Reporting only. Every number here comes from `apresvous.wire_correlator.correlate`; this
+file decides nothing about what a turn is.
 """
 
 import csv
@@ -13,9 +13,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "latency_lab"))
-
-from wire_correlator import TurnOutcome, correlate
+from apresvous.wire_correlator import TurnOutcome, correlate
 
 STAGES = ("hold", "llm", "continuation", "tts", "ttfa")
 

@@ -1,6 +1,6 @@
 """Replay the recorded corpus through a Realtime endpoint, capturing wire events.
 
-    python capture_corpus.py recordings/wav captures --repeats 5
+    apresvous capture recordings/wav captures --repeats 5
 
 One fresh WebSocket session per utterance, because a reused session accumulates
 conversation history and the LLM stage would then grow across the run.
@@ -14,7 +14,6 @@ Captures events only. Deciding what counts as a turn, a hold or a failure is cor
 and belongs in the correlator, not here.
 """
 
-import argparse
 import asyncio
 import base64
 import json
@@ -23,14 +22,33 @@ import wave
 from pathlib import Path
 
 import websockets
-from speech_to_speech.api.openai_realtime.audio_client import (
-    RealtimeAudioClientConfig,
-    build_session_update,
-)
 
 RATE = 16000
 CHUNK_MS = 20
 MAX_WAIT_AFTER_SPEECH_S = 15.0
+
+
+def _session_update() -> dict:
+    """Build the session handshake, preferring the server project's own builder.
+
+    Imported lazily so `speech_to_speech` stays an optional extra: the correlator and the
+    report need nothing from it, and a measurement library should not drag in the system it
+    measures. When it is installed the handshake is the project's own rather than a
+    reimplementation of it, which is what makes the capture faithful.
+
+    The fallback omits `format` deliberately. At 16 kHz the upstream builder omits it too, to
+    select the server's native pipeline rate, so sending an explicit format here would change
+    the thing being measured.
+    """
+    try:
+        from speech_to_speech.api.openai_realtime.audio_client import (
+            RealtimeAudioClientConfig,
+            build_session_update,
+        )
+    except ImportError:
+        return {"type": "session.update",
+                "session": {"type": "realtime", "audio": {"input": {}, "output": {}}}}
+    return build_session_update(RealtimeAudioClientConfig())
 
 
 def load_pcm(path: Path) -> bytes:
@@ -84,7 +102,7 @@ async def capture_one(url: str, wav: Path, out: Path) -> dict:
     ws, first = await open_session(url)
     async with ws:
         record(first)
-        await ws.send(json.dumps(build_session_update(RealtimeAudioClientConfig())))
+        await ws.send(json.dumps(_session_update()))
 
         async def receiver():
             try:
@@ -134,34 +152,29 @@ async def capture_one(url: str, wav: Path, out: Path) -> dict:
     return meta
 
 
-async def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("wav_dir")
-    ap.add_argument("out_dir")
-    ap.add_argument("--repeats", type=int, default=1)
-    ap.add_argument("--url", default="ws://127.0.0.1:8765/v1/realtime")
-    ap.add_argument("--only", default=None, help="comma-separated utterance ids")
-    args = ap.parse_args()
-
-    wavs = sorted(Path(args.wav_dir).glob("*.wav"))
-    if args.only:
-        keep = {s.strip() for s in args.only.split(",")}
+async def run(wav_dir: str, out_dir: str, *, repeats: int = 1,
+              url: str = "ws://127.0.0.1:8765/v1/realtime", only: str | None = None) -> int:
+    """Replay every wav in *wav_dir* *repeats* times, writing one capture per turn."""
+    wavs = sorted(Path(wav_dir).glob("*.wav"))
+    if only:
+        keep = {s.strip() for s in only.split(",")}
         wavs = [w for w in wavs if w.stem in keep]
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if not wavs:
+        print(f"no .wav files in {wav_dir}")
+        return 1
 
-    run_started = time.monotonic()
-    for r in range(1, args.repeats + 1):
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    started = time.monotonic()
+    for r in range(1, repeats + 1):
         for wav in wavs:
-            out = out_dir / f"{wav.stem}-r{r}.jsonl"
+            target = out / f"{wav.stem}-r{r}.jsonl"
             t = time.monotonic()
-            meta = await capture_one(args.url, wav, out)
-            # the server releases its pipeline slot ~50ms after the socket closes; settling
-            # here keeps the retry path an exception rather than the normal case
-            await asyncio.sleep(1.0)
+            meta = await capture_one(url, wav, target)
             print(f"  r{r} {wav.stem:<5} {meta['n_events']:>4} events  "
-                  f"{time.monotonic()-t:5.1f}s  -> {out.name}", flush=True)
-    print(f"done in {(time.monotonic()-run_started)/60:.1f} min")
-
-
-asyncio.run(main())
+                  f"{time.monotonic() - t:5.1f}s  -> {target.name}", flush=True)
+            # The server releases its pipeline slot ~50ms after the socket closes; settling
+            # here keeps the retry path an exception rather than the normal case.
+            await asyncio.sleep(1.0)
+    print(f"done in {(time.monotonic() - started) / 60:.1f} min")
+    return 0

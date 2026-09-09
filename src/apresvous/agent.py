@@ -1,6 +1,5 @@
 import time
 
-from correlator import TurnCorrelator
 from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import (
@@ -21,7 +20,9 @@ from livekit.agents.voice.events import (
     SpeechCreatedEvent,  # .user_initiated: bool, .source: 'say'|'generate_reply',
 )
 from livekit.plugins import cartesia, deepgram, google, silero
-from sink import JsonlMetricSink
+
+from apresvous.correlator import TurnCorrelator
+from apresvous.sink import JsonlMetricSink
 
 load_dotenv(".env.local")
 
@@ -88,7 +89,7 @@ If the caller asks for a date that is not on this list, say so plainly and offer
 
 """
 
-@server.rtc_session(agent_name="latency-lab")
+@server.rtc_session(agent_name="apresvous")
 async def entrypoint(ctx: JobContext) -> None:
     session = AgentSession(
         stt=deepgram.STT(model="nova-3", language="en", endpointing_ms=25),

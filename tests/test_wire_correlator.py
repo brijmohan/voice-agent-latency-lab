@@ -9,13 +9,12 @@ Run:  uv run pytest tests/test_wire_correlator.py -v
 
 import json
 import os
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "latency_lab"))
+
 
 FIXTURES = ROOT / "tests" / "fixtures" / "wire"
 """Five real sessions, with base64 audio payloads blanked. Every field the correlator reads
@@ -30,7 +29,7 @@ Not `Path(os.environ.get(..., ""))`: `Path("")` is `PosixPath('.')`, which is a 
 directory, so the skip guard would never fire and the test would glob the working directory
 instead."""
 
-from wire_correlator import TurnOutcome, correlate
+from apresvous.wire_correlator import TurnOutcome, correlate
 
 
 def load(name, base=None):
