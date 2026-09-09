@@ -29,11 +29,14 @@ key to join a response to the input that caused it. Grouping has to be temporal.
 |---|---|
 | `speech_stopped_t` | the **last** `input_audio_buffer.speech_stopped` before `response.created` |
 | `transcript_completed_t` | the **last** `…input_audio_transcription.completed` before `response.created` |
-| `response_created_t` | `response.created` |
+| `response_created_t` | the **first** `response.created` of the turn |
+| `audio_response_created_t` | the `response.created` that produced the first audio |
+| `responses` | responses in the turn; more than one means a tool ran |
 | `first_audio_t` | the **first** `response.output_audio.delta` |
 | `hold` | `transcript_completed_t - speech_stopped_t` |
 | `llm` | `response_created_t - transcript_completed_t` |
-| `tts` | `first_audio_t - response_created_t` |
+| `continuation` | `audio_response_created_t - response_created_t`, zero unless a tool ran |
+| `tts` | `first_audio_t - audio_response_created_t` |
 | `ttfa` | `first_audio_t - speech_stopped_t` |
 | `segments` | count of `speech_stopped` in the turn |
 | `revisions` | count of **distinct** input `item_id`s with a completed transcription |
@@ -63,12 +66,19 @@ Zero `SILENT`, `HELD` and `AGENT_INITIATED` occur in the current 115 captures. A
 representable. A correlator that cannot express an outcome will silently drop it, and the
 first time it happens will be the run that mattered.
 
-## Known limitation to write down, not solve now
+## Tool turns
 
-One user turn can produce more than one response when tools are involved, and this grouping
-will split it. Zero occurrences in this corpus because the session had no tools. PR #539 hit
-exactly this and logged two records under one key. Record it as a limitation with a test
-marked xfail rather than pretending it cannot happen.
+Consecutive responses with **no caller speech between them** are one turn: the caller spoke
+once and waited once, however many generations it took. The time between the first response
+and the one that produced audio is `continuation`, and it contains tool execution plus any
+further generation, which the wire cannot separate. The identity becomes
+
+```
+hold + llm + continuation + tts == ttfa
+```
+
+and `continuation` is zero on an ordinary turn, so nothing changes there. Still zero
+occurrences in the corpus: this is covered by synthetic tests only.
 
 ## Suggested surface
 

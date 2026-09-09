@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "latency_la
 
 from wire_correlator import TurnOutcome, correlate
 
-STAGES = ("hold", "llm", "tts", "ttfa")
+STAGES = ("hold", "llm", "continuation", "tts", "ttfa")
 
 
 def pct(values, q):
@@ -49,10 +49,13 @@ def main(path, csv_out=None):
         return 0
 
     print(f"\nRESPONDED turns, n = {len(ok)}")
-    print(f"  {'stage':<6}{'P50':>8}{'P90':>8}{'P99':>8}{'max':>8}")
+    print(f"  {'stage':<13}{'P50':>8}{'P90':>8}{'P99':>8}{'max':>8}")
     for stage in STAGES:
         v = [getattr(t, stage) for t in ok]
-        print(f"  {stage:<6}{pct(v, .50):8.3f}{pct(v, .90):8.3f}{pct(v, .99):8.3f}{max(v):8.3f}")
+        print(f"  {stage:<13}{pct(v, .50):8.3f}{pct(v, .90):8.3f}{pct(v, .99):8.3f}{max(v):8.3f}")
+    multi = sum(1 for t in ok if t.responses > 1)
+    if multi:
+        print(f"\n  {multi} turn(s) took more than one response (tool call or continuation)")
 
     print(f"\n  revisions per turn: mean {st.mean(t.revisions for t in ok):.2f}, "
           f"max {max(t.revisions for t in ok)}")

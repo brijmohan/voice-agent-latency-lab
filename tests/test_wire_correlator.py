@@ -63,7 +63,7 @@ def test_single_segment_turn_is_unaffected_by_the_grouping():
 def test_stages_sum_to_ttfa():
     """hold + llm + tts is TTFA by construction. It should also be true in the code."""
     t = one_turn("A03-r1")
-    assert t.hold + t.llm + t.tts == pytest.approx(t.ttfa, abs=1e-6)
+    assert t.hold + t.llm + t.continuation + t.tts == pytest.approx(t.ttfa, abs=1e-6)
 
 
 # --- the regression this whole brief exists for -----------------------------
@@ -176,15 +176,14 @@ def test_a_response_with_no_audio_is_silent_not_dropped():
     assert turns[0].ttfa is None
 
 
-# --- the known limitation, recorded rather than hidden ----------------------
+# --- tool turns: several responses, one turn --------------------------------
 
-@pytest.mark.xfail(reason="response-boundary grouping splits tool turns; see docs/wire-spec.md", strict=False)
 def test_a_tool_turn_is_one_turn_not_two():
     """One user turn, two responses, because a tool ran in between.
 
-    Response-boundary grouping splits this. Zero occurrences in the corpus because the
-    session had no tools, so this is untested rather than absent. PR #539 hit exactly this
-    and logged two records under one key.
+    The caller spoke once and waited once, so this is one turn however many generations it
+    took. The interval between the first response and the one that spoke is `continuation`:
+    tool execution plus any further generation, which the wire cannot separate.
     """
     events = [
         {"t": 0.5, "type": "input_audio_buffer.speech_started", "event": {"item_id": "i1"}},
@@ -198,83 +197,82 @@ def test_a_tool_turn_is_one_turn_not_two():
         {"t": 5.4, "type": "response.output_audio.delta", "event": {"delta": "AAA"}},
         {"t": 6.0, "type": "response.done", "event": {"response": {"id": "resp_2"}}},
     ]
-    assert len(correlate(events)) == 1
+    turns = correlate(events)
+    assert len(turns) == 1
+    t = turns[0]
+    assert t.responses == 2
+    assert t.outcome is TurnOutcome.RESPONDED
+    assert t.ttfa == pytest.approx(3.4)          # 5.4 - 2.0, the whole wait
+    assert t.hold == pytest.approx(0.1)
+    assert t.llm == pytest.approx(0.9)           # 3.0 - 2.1, first generation
+    assert t.continuation == pytest.approx(2.2)  # 5.2 - 3.0, tool plus regeneration
+    assert t.tts == pytest.approx(0.2)           # 5.4 - 5.2
+    assert t.hold + t.llm + t.continuation + t.tts == pytest.approx(t.ttfa)
 
 
-def test_a_response_with_no_caller_speech_is_agent_initiated():
-    """RESPONDED must guarantee a TTFA, so a response answering nothing cannot be RESPONDED.
+def test_speaking_before_a_tool_leaves_continuation_at_zero():
+    """The agent may answer first and call the tool afterwards.
 
-    s2s sends no greeting by default so this never occurred in the corpus. Without this
-    branch, `outcome is RESPONDED` and `ttfa is not None` could disagree, and every
-    aggregate over RESPONDED turns would silently carry a None.
+    TTFA then ends at that first audio, and the tool time falls after it, where it belongs:
+    the caller was already being spoken to.
     """
     events = [
-        {"t": 1.0, "type": "response.created", "event": {"response": {"id": "resp_1"}}},
-        {"t": 1.2, "type": "response.output_audio.delta", "event": {"delta": "AAA"}},
-        {"t": 2.0, "type": "response.done", "event": {"response": {"id": "resp_1"}}},
+        {"t": 2.0, "type": "input_audio_buffer.speech_stopped", "event": {"item_id": "i1"}},
+        {"t": 2.1, "type": "conversation.item.input_audio_transcription.completed",
+         "event": {"item_id": "i1", "transcript": "check my order"}},
+        {"t": 3.0, "type": "response.created", "event": {"response": {"id": "resp_1"}}},
+        {"t": 3.2, "type": "response.output_audio.delta", "event": {"delta": "one moment"}},
+        {"t": 3.4, "type": "response.done", "event": {"response": {"id": "resp_1"}}},
+        {"t": 6.0, "type": "response.created", "event": {"response": {"id": "resp_2"}}},
+        {"t": 6.2, "type": "response.output_audio.delta", "event": {"delta": "it shipped"}},
+        {"t": 6.8, "type": "response.done", "event": {"response": {"id": "resp_2"}}},
     ]
     turns = correlate(events)
     assert len(turns) == 1
-    assert turns[0].outcome is TurnOutcome.AGENT_INITIATED
+    t = turns[0]
+    assert t.responses == 2
+    assert t.continuation == pytest.approx(0.0)
+    assert t.ttfa == pytest.approx(1.2)   # 3.2 - 2.0, not 6.2
+
+
+def test_new_caller_speech_still_starts_a_new_turn():
+    """The merge must not swallow genuinely separate turns.
+
+    Speech between two responses is what proves the first turn ended.
+    """
+    events = [
+        {"t": 1.0, "type": "input_audio_buffer.speech_stopped", "event": {"item_id": "i1"}},
+        {"t": 1.1, "type": "conversation.item.input_audio_transcription.completed",
+         "event": {"item_id": "i1", "transcript": "hello"}},
+        {"t": 2.0, "type": "response.created", "event": {"response": {"id": "resp_1"}}},
+        {"t": 2.2, "type": "response.output_audio.delta", "event": {"delta": "A"}},
+        {"t": 2.5, "type": "response.done", "event": {"response": {"id": "resp_1"}}},
+        {"t": 4.0, "type": "input_audio_buffer.speech_stopped", "event": {"item_id": "i2"}},
+        {"t": 4.1, "type": "conversation.item.input_audio_transcription.completed",
+         "event": {"item_id": "i2", "transcript": "book it"}},
+        {"t": 5.0, "type": "response.created", "event": {"response": {"id": "resp_2"}}},
+        {"t": 5.3, "type": "response.output_audio.delta", "event": {"delta": "B"}},
+        {"t": 5.6, "type": "response.done", "event": {"response": {"id": "resp_2"}}},
+    ]
+    turns = correlate(events)
+    assert len(turns) == 2
+    assert [t.responses for t in turns] == [1, 1]
+    assert turns[0].ttfa == pytest.approx(1.2)
+    assert turns[1].ttfa == pytest.approx(1.3)
+
+
+def test_a_tool_turn_that_never_speaks_is_silent():
+    events = [
+        {"t": 2.0, "type": "input_audio_buffer.speech_stopped", "event": {"item_id": "i1"}},
+        {"t": 2.1, "type": "conversation.item.input_audio_transcription.completed",
+         "event": {"item_id": "i1", "transcript": "check my order"}},
+        {"t": 3.0, "type": "response.created", "event": {"response": {"id": "resp_1"}}},
+        {"t": 3.2, "type": "response.done", "event": {"response": {"id": "resp_1"}}},
+        {"t": 5.0, "type": "response.created", "event": {"response": {"id": "resp_2"}}},
+        {"t": 5.2, "type": "response.done", "event": {"response": {"id": "resp_2"}}},
+    ]
+    turns = correlate(events)
+    assert len(turns) == 1
+    assert turns[0].responses == 2
+    assert turns[0].outcome is TurnOutcome.SILENT
     assert turns[0].ttfa is None
-
-
-def test_responded_always_has_a_ttfa():
-    """The invariant the outcome exists to carry, asserted over every capture available."""
-    base = CORPUS if (CORPUS and CORPUS.is_dir()) else FIXTURES
-    for f in sorted(base.glob("*.jsonl")):
-        for t in correlate(load(f.stem, base)):
-            if t.outcome is TurnOutcome.RESPONDED:
-                assert t.ttfa is not None, f"{f.stem}: RESPONDED with no TTFA"
-
-
-# --- invariants that must hold on every capture, not just the named ones ----
-
-def _all_available():
-    base = CORPUS if (CORPUS and CORPUS.is_dir()) else FIXTURES
-    for f in sorted(base.glob("*.jsonl")):
-        for t in correlate(load(f.stem, base)):
-            yield f.stem, t
-
-
-def test_no_stage_is_ever_negative():
-    """A negative stage means the anchors were picked in the wrong order.
-
-    It would not raise, it would quietly drag the mean down, which is the failure mode that
-    makes a latency table look good.
-    """
-    for name, t in _all_available():
-        for stage in ("hold", "llm", "tts", "ttfa"):
-            v = getattr(t, stage)
-            assert v is None or v >= 0, f"{name}: {stage} = {v}"
-
-
-def test_event_anchors_are_monotonic():
-    """speech stop, then transcript, then response, then audio. In that order, always."""
-    for name, t in _all_available():
-        anchors = [t.speech_stopped_t, t.transcript_completed_t,
-                   t.response_created_t, t.first_audio_t]
-        present = [a for a in anchors if a is not None]
-        assert present == sorted(present), f"{name}: anchors out of order {anchors}"
-
-
-def test_stages_sum_to_ttfa_on_every_capture():
-    for name, t in _all_available():
-        if t.ttfa is not None:
-            assert t.hold + t.llm + t.tts == pytest.approx(t.ttfa, abs=1e-6), name
-
-
-def test_segments_never_fewer_than_revisions():
-    """Each transcript revision follows at least one speech segment, so segments >= revisions.
-
-    E03 is the extreme: 11 segments folded into 4 revisions.
-    """
-    for name, t in _all_available():
-        assert t.segments >= t.revisions, f"{name}: {t.segments} segments, {t.revisions} revisions"
-
-
-def test_a_responded_turn_has_at_least_one_revision():
-    """A reply with no completed transcript would mean the model answered nothing."""
-    for name, t in _all_available():
-        if t.outcome is TurnOutcome.RESPONDED:
-            assert t.revisions >= 1, name

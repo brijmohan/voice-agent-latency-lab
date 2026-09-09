@@ -27,10 +27,10 @@ HUMAN_END = 0.42
 AGENT_START = 0.63
 
 THEMES = {
-    "light": dict(fg="#1f2328", muted="#59636e", human="#1f6feb", agent="#8c959f",
-                  accent="#cf222e", rule="#d1d9e0"),
-    "dark": dict(fg="#e6edf3", muted="#9198a1", human="#4493f8", agent="#6e7681",
-                 accent="#f85149", rule="#3d444d"),
+    "light": {"fg": "#1f2328", "muted": "#59636e", "human": "#1f6feb",
+              "agent": "#8c959f", "accent": "#cf222e", "rule": "#d1d9e0"},
+    "dark": {"fg": "#e6edf3", "muted": "#9198a1", "human": "#4493f8",
+             "agent": "#6e7681", "accent": "#f85149", "rule": "#3d444d"},
 }
 
 

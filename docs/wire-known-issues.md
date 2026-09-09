@@ -5,10 +5,10 @@ Ordered by what would embarrass you first.
 
 ## Correctness, untested paths
 
-1. **Tool turns split into two.** One user turn that calls a tool produces two responses, and
-   response-boundary grouping makes that two turns. Recorded as an xfail. **Zero occurrences
-   in the corpus because that session had no tools**, so it is untested rather than absent.
-   PR #539 hit exactly this and logged two records under one key.
+1. ~~Tool turns split into two.~~ **Fixed 9 Sep.** Consecutive responses with no caller
+   speech between them are now one turn, with a `continuation` stage covering tool execution
+   and any intermediate generation. Still **zero occurrences in the corpus**, so this is
+   carried by synthetic tests alone and has never met a real tool turn.
 
 2. ~~A response with no preceding speech is emitted as RESPONDED with `ttfa=None`.~~
    **Fixed 9 Sep.** Such a turn is now `AGENT_INITIATED`, and a test asserts over the whole

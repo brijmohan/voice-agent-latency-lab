@@ -52,13 +52,31 @@ Two stages that are not what their obvious names would say
   the LLM *finishes*, verified against the server's own MLX lock log. The wire cannot give
   TTFT on this stack at any anchor, and reporting it as TTFT would be a fabrication.
 
-Known limitation
-----------------
+Tool turns produce several responses for one turn
+-------------------------------------------------
 
-One user turn that calls a tool produces more than one response, and this grouping splits
-it. Zero occurrences in the reference corpus because that session had no tools, so it is
-untested rather than absent. PR #539 hit exactly this case and logged two records under one
-key. It is recorded as an xfail test rather than as a surprise later.
+A turn that calls a tool emits more than one ``response.created``: one generation decides to
+call the tool, the tool runs, and a later generation speaks the answer. The maintainer of the
+subject project put it as "tools can call other tools can continue, the assistant can speak,
+call a tool, use the tool to continue speaking."
+
+Consecutive responses with **no caller speech between them** are therefore one turn. The
+caller spoke once and waited once, so they experienced one turn regardless of how many
+generations it took.
+
+This needs a stage the single-response model has no name for. Between the first generation
+finishing and the generation that actually produced audio there is tool execution, plus any
+further generations, and that time is part of the caller's wait::
+
+    hold + llm + continuation + tts == ttfa
+
+``continuation`` is zero for an ordinary turn, so the identity is unchanged there. It is
+deliberately not called ``tool``: it contains tool execution *and* intermediate generation,
+and the wire cannot separate the two.
+
+Note that the agent may speak *before* calling a tool. In that case the first audio arrives
+from the first response, ``continuation`` is zero, and the tool time falls after TTFA where
+it belongs, because the caller was already being spoken to.
 """
 
 from __future__ import annotations
@@ -118,7 +136,16 @@ class Turn:
     """The **last** completed transcript before the response."""
 
     response_created_t: float | None = None
+    """The **first** response of the turn. A tool turn has several."""
+
+    audio_response_created_t: float | None = None
+    """The response that actually produced the first audio. Equals
+    :attr:`response_created_t` unless a tool ran first."""
+
     first_audio_t: float | None = None
+
+    responses: int = 0
+    """Responses in this turn. More than one means a tool ran, or the model continued."""
 
     segments: int = 0
     """Speech segments the VAD found in this turn. More than one is the common case."""
@@ -147,11 +174,22 @@ class Turn:
         return self.response_created_t - self.transcript_completed_t
 
     @property
-    def tts(self) -> float | None:
-        """Response creation to first audio byte."""
-        if self.response_created_t is None or self.first_audio_t is None:
+    def continuation(self) -> float | None:
+        """First response to the response that produced audio.
+
+        Zero on an ordinary turn. On a tool turn it holds the tool execution plus any
+        intermediate generation, which the wire cannot separate.
+        """
+        if self.response_created_t is None or self.audio_response_created_t is None:
             return None
-        return self.first_audio_t - self.response_created_t
+        return self.audio_response_created_t - self.response_created_t
+
+    @property
+    def tts(self) -> float | None:
+        """The audio-producing response's creation to its first audio byte."""
+        if self.audio_response_created_t is None or self.first_audio_t is None:
+            return None
+        return self.first_audio_t - self.audio_response_created_t
 
     @property
     def ttfa(self) -> float | None:
@@ -200,58 +238,88 @@ def correlate(events: list[dict[str, Any]]) -> list[Turn]:
             The ``_capture.meta`` header line may be included or omitted.
 
     Returns:
-        One :class:`Turn` per response, plus one per stretch of caller speech that never
-        received a response. Ordered by when each turn's response was created.
+        One :class:`Turn` per turn the caller experienced, plus one per stretch of caller
+        speech that never received a response. Ordered by when each turn began.
     """
     turns: list[Turn] = []
     pending = _Input()
     open_response: Turn | None = None
+    current: Turn | None = None
+    """A finished turn, held back in case a continuation response follows it."""
+
+    def close(turn: Turn | None) -> None:
+        if turn is not None:
+            turns.append(turn)
 
     # Sort by recorded time rather than trusting file order. The capture writes in arrival
     # order and that is normally the same thing, but the measurement lives in `t`, so `t` is
     # what orders it.
     for ev in sorted((e for e in events if e.get("type") != "_capture.meta"),
                      key=lambda e: e["t"]):
-        t, kind, body = ev["t"], ev["type"], ev.get("event", {})
+        t, kind, body_ = ev["t"], ev["type"], ev.get("event", {})
 
         # Input always accumulates into `pending`, which is reset the moment a response is
         # created. Speech arriving *during* a response is a barge-in and belongs to the next
         # turn, not the one being spoken.
         if kind in (SPEECH_STOPPED, TRANSCRIPT_DONE):
-            pending.add(t, kind, body)
-            continue
+            pending.add(t, kind, body_)
 
-        if kind == RESPONSE_CREATED:
+        elif kind == RESPONSE_CREATED:
             if open_response is not None:
-                # No `response.done` closed the previous one. Emit it rather than lose it.
-                turns.append(_finish(open_response))
-            open_response = Turn(outcome=TurnOutcome.SILENT, response_created_t=t,
-                                 response_id=(body.get("response") or {}).get("id"))
-            pending.apply(open_response)
-            pending = _Input()
+                # No `response.done` closed the previous one. Keep it rather than lose it and
+                # treat this as a continuation of the same turn.
+                open_response.responses += 1
+                if open_response.first_audio_t is None:
+                    open_response.audio_response_created_t = t
+            elif current is not None and not pending:
+                # A response with no caller speech since the last one is a continuation: the
+                # model called a tool, or carried on speaking. The caller spoke once and
+                # waited once, so this is still their turn.
+                open_response, current = current, None
+                open_response.responses += 1
+                if open_response.first_audio_t is None:
+                    open_response.audio_response_created_t = t
+            else:
+                close(current)
+                current = None
+                open_response = Turn(
+                    outcome=TurnOutcome.SILENT,
+                    response_created_t=t,
+                    audio_response_created_t=t,
+                    responses=1,
+                    response_id=(body_.get("response") or {}).get("id"),
+                )
+                pending.apply(open_response)
+                pending = _Input()
 
         elif kind == AUDIO_DELTA:
-            if open_response is not None and open_response.first_audio_t is None:
-                open_response.first_audio_t = t
+            target = open_response if open_response is not None else current
+            if target is not None and target.first_audio_t is None:
+                target.first_audio_t = t
 
         elif kind == RESPONSE_DONE:
             if open_response is not None:
-                turns.append(_finish(open_response))
+                # Held rather than emitted: a continuation may still follow, and only the
+                # arrival of new caller speech proves the turn is over.
+                current = _finish(open_response)
                 open_response = None
 
-        elif kind == CAPTURE_TIMEOUT:
-            # The capture gave up waiting. If the caller had spoken and nothing answered,
-            # that is a held turn and it is counted, not discarded.
-            if open_response is None and pending:
-                held = Turn(outcome=TurnOutcome.HELD, last_wait_s=body.get("waited_s"))
-                pending.apply(held)
-                turns.append(held)
-                pending = _Input()
+        # The capture gave up waiting. If the caller spoke and nothing answered, that is a
+        # held turn, and it is counted rather than discarded.
+        elif kind == CAPTURE_TIMEOUT and open_response is None and pending:
+            close(current)
+            current = None
+            held = Turn(outcome=TurnOutcome.HELD, last_wait_s=body_.get("waited_s"))
+            pending.apply(held)
+            turns.append(held)
+            pending = _Input()
 
     if open_response is not None:
-        turns.append(_finish(open_response))
-    elif pending:
-        # Capture ended mid-turn with no timeout marker. Still a held turn.
+        close(_finish(open_response))
+    else:
+        close(current)
+    if pending:
+        # Capture ended mid-turn. Still a held turn.
         held = Turn(outcome=TurnOutcome.HELD)
         pending.apply(held)
         turns.append(held)
