@@ -36,19 +36,48 @@ The caller experiences an assistant that cannot do anything.
 The patched run logs **no warnings of any kind**: every call the model emitted bound and
 was delivered.
 
-### What this does not show
+### Two-argument binding, and a tool description that mattered more than the prompt
 
-**`hold_slot` was never invoked, so two-argument binding is still unproven on real speech.**
-Asked to *book* a slot, the model called the read-only `check_slot` with one argument
-instead. The multi-argument path is covered by unit tests and by nothing else.
+In the run above the model answered a *booking* request by calling the read-only
+`check_slot` with one argument. `hold_slot` was never reached, so two-argument binding went
+untested. The cause turned out to be the tool description rather than the model: `hold_slot`
+was described as *"Hold a ceremony slot pending human validation"*, and "hold" is not a word
+a caller uses.
 
-That substitution is a finding in its own right. For a public service the failure is in the
-safe direction, since checking is harmless where booking is not, but it means the booking
-path does not work as scripted. Whether the cause is the instruction wording, the tool
-description, or model conservatism is not established.
+Three profiles, three runs each, same recording, same server:
 
-"Book it." produced no call in either condition, which is expected: no arguments were
-spoken and the tool had to be inferred entirely from context.
+| Profile | What changed | `hold_slot` reached |
+|---|---|---|
+| v1 | original: "Hold a ceremony slot pending human validation" | 0 of 3 |
+| v2 | **description only**: "Book, reserve or take a ceremony slot for the caller..." | **3 of 3** |
+| v3 | v2 description **plus** explicit routing instructions | 0 of 3 |
+
+Every arm was stable across its three runs.
+
+**Rewriting the description fixed it. Adding routing instructions on top broke it again.**
+The v3 instruction contained the rule *"When the caller asks about one specific date, call
+check_slot"*, and "Saturday the fourteenth" is a specific date, so that rule matched the
+surface form of the utterance and won. Prompt guidance that enumerates surface patterns can
+override a correctly described tool, and the fix belongs in the description, which travels
+with the tool, rather than in an instruction that has to be maintained separately.
+
+With v2 the model produced:
+
+```
+hold_slot({"date": "Saturday 14 June", "time": "10:00"})
+```
+
+Running the same profile against the **unpatched** server proves the positional path was
+what was exercised:
+
+```
+Dropping positional arguments for 'hold_slot': {'__arg_0__', '__arg_1__'}
+Skipping invalid tool call: Missing required parameters for 'hold_slot': {'time', 'date'}
+```
+
+The model emitted both arguments positionally. Unpatched, both were discarded and the call
+was skipped. **Two-argument binding is therefore verified end to end on real speech**, not
+only in unit tests.
 
 ---
 
@@ -116,9 +145,12 @@ to pronounce a word on the day cannot be caught by testing.
    value single mitigation.
 4. **Readback is not optional.** Three of five addresses were wrong in ways only the caller
    can catch.
-5. **The two-argument tool path still needs a real test.** Either reword the instruction so
-   the model reaches for `hold_slot`, or exercise it with a tool that has no single-argument
-   alternative.
+5. **Describe tools in the caller's words, not the system's.** "Hold a ceremony slot" cost
+   every booking in this corpus; "Book, reserve or take" recovered all of them. The
+   description travels with the tool and is the cheaper place to fix routing than a prompt.
+6. **Be sparing with routing instructions.** Adding them here made routing worse, because a
+   rule matching the surface form of an utterance beat the tool that actually fitted the
+   intent.
 
 ## Reproduce
 
