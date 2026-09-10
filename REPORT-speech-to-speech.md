@@ -1,10 +1,20 @@
-# Externally observable per-turn latency in a fully local speech-to-speech pipeline
+# Measuring a fully local speech-to-speech pipeline from outside the process
 
-**Subject:** `huggingface/speech-to-speech` v1.0.0 (`16d7f98`)
+**Subject:** `huggingface/speech-to-speech` v1.0.0 (`16d7f98`), fully local on an M3 Pro
 **Method:** black-box observation of the OpenAI Realtime protocol, no fork and no patch
-**Sample:** 23 recorded human utterances, 5 replays each, 115 turns
-**Headline:** TTFA median 1.577s. Endpointing is the one stage that is not externally
-observable, and its cost is 0.082s on a fluent utterance against 0.689s on a hesitant one.
+**Sample:** 41 recorded human utterances by one speaker; 115 replayed turns for latency
+
+Three experiments on one stack.
+
+1. **Latency**, sections 1 to 6. TTFA median 1.577s. Endpointing is the only stage not
+   externally observable, and it costs 0.082s on a fluent utterance against 0.689s on a
+   hesitant one.
+2. **Tool invocation**, section 7. Six of six tool calls were silently discarded before
+   reaching the client, by a parser that dropped positional arguments the model had
+   supplied. A fix recovers five of six, and the sixth turns out to depend on the wording of
+   a tool description rather than on the model.
+3. **Contact capture**, section 8. Not one of five spoken email addresses transcribed into a
+   syntactically valid form. Telephone numbers survived every spoken form tested.
 
 ---
 
@@ -25,6 +35,11 @@ The answer is intended to be useful in two directions. Where the wire suffices, 
 becomes portable across implementations and versions without modification. Where it does not,
 the gap identifies precisely what internal instrumentation is needed for and why it cannot
 be replaced.
+
+Two further questions follow from putting the same stack under a booking workload rather
+than a conversational one: whether a tool call survives the round trip from model to client,
+and whether a contact detail spoken aloud can be captured accurately enough to act on.
+Sections 7 and 8 address those.
 
 **This is not a comparison between systems.** No second stack appears in these results. A
 cascaded pipeline calling cloud APIs and a fully local pipeline on a laptop differ in hosting
@@ -66,7 +81,7 @@ count: several segments may be folded into one revision.
 
 Instrumentation inside this pipeline exists in `pipeline/turn_latency.py`, proposed in
 upstream PR #539, which emits per-turn `stt`, `llm`, `tts_ttfa` and `e2e` from within the
-process. The present work is complementary rather than competing, and Section 7 states the
+process. The present work is complementary rather than competing, and Section 9 states the
 division precisely.
 
 Externally, `livekit/eot-bench` (Apache-2.0, 14 languages) evaluates end-of-turn models
@@ -124,8 +139,10 @@ with a vocoder tests the vocoder. The difference is measurable: a macOS `say` ut
 p=0.736, mid-range and ambiguous, where recorded human speech in this corpus scores a median
 of 0.923 when complete and 0.028 when incomplete.
 
-23 utterances were recorded by one speaker in a single sitting, in six blocks chosen to
-exercise distinct endpointing conditions:
+41 utterances were recorded by one speaker under identical conditions. Twenty-three form the
+latency corpus, in six blocks chosen to exercise distinct endpointing conditions. A further
+eighteen (blocks G, H and I) cover tool invocation and contact capture and are described in
+sections 7 and 8.
 
 | Block | n | Construction | Purpose |
 |---|---|---|---|
@@ -290,7 +307,139 @@ MLX-LLM lock acquisitions across 115 turns. **This figure is reported tentativel
 log recorded only 21 Parakeet acquisitions over the same window, which is not consistent with
 any explanation currently available, so the logging itself is not fully understood.
 
-## 7. What is not externally observable, and why
+## 7. Tool invocation
+
+### 7.1 Method
+
+Three tools were declared over the wire, in the shape a booking flow would need:
+`list_slots(month)`, `check_slot(date)` and `hold_slot(date, time)`. Six recorded requests
+(block G of the corpus) were replayed against the same server on two builds, differing only
+in how the tool-call parser handles positional arguments. A canned tool result was returned
+so each turn could complete.
+
+### 7.2 Result: every call was discarded before reaching the client
+
+| Utterance as transcribed | Unmodified server | With positional binding |
+|---|---|---|
+| "What dates do you have available in June?" | no call | `list_slots({"month": "June"})` |
+| "Is Saturday the fourteenth still free?" | no call | `check_slot({"date": "Saturday 14 June"})` |
+| "I'd like to book Saturday the fourteenth at ten in the morning." | no call | `check_slot({"date": "Saturday 14 June"})` |
+| "Could you check the twenty-first as well?" | no call | `check_slot({"date": "Saturday 21 June"})` |
+| "Actually, what do you have in July instead?" | no call | `list_slots({"month": "July"})` |
+| "Book it." | no call | no call |
+
+The unmodified server's log gives the mechanism:
+
+```
+Dropping positional arguments for 'list_slots': {'__arg_0__'}
+Skipping invalid tool call: Missing required parameters for 'list_slots': {'month'}
+```
+
+The model emitted the call with its argument. The parser discarded the argument because it
+was positional, validation then found the required parameter missing, and the call was
+dropped. Nothing reached the client, so the caller experiences an assistant that cannot act.
+
+The cause is structural rather than a model defect. `FunctionTool.to_code_prompt` renders
+each tool to the model as a Python signature, so a model shown `def book(date, time)`
+answers `book("14 June", "10:00")`. **The prompt format elicits precisely the form the
+parser then discarded.** The argument order is unambiguous, because the same code builds the
+rendered signature by iterating `properties` in declaration order.
+
+A patch binding positional arguments to that order is on
+`fix/positional-tool-args`; the run above is its evidence. With it the server logs no
+warnings at all.
+
+### 7.3 The tool description routed better than the instruction
+
+In the run above, a *booking* request produced a call to the read-only `check_slot`, so
+`hold_slot` and its two arguments went untested. The cause was the description:
+`hold_slot` was documented as *"Hold a ceremony slot pending human validation"*, and "hold"
+is not a word a caller uses.
+
+Three profiles, three runs each on one recording, stable in every arm:
+
+| Profile | What changed | `hold_slot` reached |
+|---|---|---|
+| v1 | original description | 0 of 3 |
+| v2 | **description only**: "Book, reserve or take a ceremony slot..." | **3 of 3** |
+| v3 | v2 description **plus** explicit routing instructions | 0 of 3 |
+
+Rewriting the description fixed the routing. Adding instructions on top broke it again: the
+v3 instruction contained the rule *"When the caller asks about one specific date, call
+check_slot"*, and "Saturday the fourteenth" is a specific date, so a rule matching the
+surface form of the utterance beat the tool that matched the intent.
+
+**Guidance that enumerates surface patterns can override a correctly described tool.** The
+description travels with the tool and is the cheaper place to fix routing.
+
+Under v2 the model produced `hold_slot({"date": "Saturday 14 June", "time": "10:00"})`. The
+same profile against the unmodified server shows what was being recovered:
+
+```
+Dropping positional arguments for 'hold_slot': {'__arg_0__', '__arg_1__'}
+Skipping invalid tool call: Missing required parameters for 'hold_slot': {'time', 'date'}
+```
+
+Both arguments were emitted positionally and both were discarded, so multi-argument binding
+is verified on real speech and not only in unit tests.
+
+## 8. Contact capture
+
+### 8.1 Method
+
+Eight recorded utterances (block H) giving an email address or a telephone number in the
+forms a caller actually uses, including spelled-out letters, the phonetic alphabet, French
+domain conventions, and a French mobile number in both pair form and digit-by-digit form.
+All values are fictional. Transcripts are the final revision of the input transcription.
+
+### 8.2 Result: no email address survived
+
+| Said | Transcribed | Outcome |
+|---|---|---|
+| "edward dot hawkins at gmail dot com" | `edward.hawkins at gmail dot com` | "at" and "dot com" left as words |
+| "E, D, W, A, R, D, at gmail dot com" | `edw ard at gmail.com` | letters not assembled, space inserted |
+| "edward at orange point fr" | `edward erobasorange.fr` | "at" became "erobas", glued to the domain |
+| "edward at laposte dot net" | `Edward at laPost.net` | wrong domain, silently undeliverable |
+| "edward at northgate dot example dot com" | `Edward at northgate.example.com` | correct on this take |
+| "N for November, O for Oscar, R for Romeo..." | verbatim, unassembled | recoverable |
+
+**None of the five addresses transcribed into a syntactically valid form.** The best case
+still requires a normalisation layer, and three lose information no layer can recover.
+
+Spelling the address out, the intuitive mitigation, performed **worst**: the letters were
+merged and a spurious space inserted. The phonetic alphabet was the only spoken form that
+lost nothing, at the cost of being slow and unnatural.
+
+### 8.3 Telephone numbers survive both spoken forms
+
+| Said | Transcribed |
+|---|---|
+| "zero six, twelve, thirty four, fifty six, seventy eight" (French pair form) | `zero six twelve thirty-four fifty-six seventy-eight` |
+| "zero six, one two, three four, five six, seven eight" (digit by digit) | `Zero six, one, two, three, four, five, six, seven, eight` |
+
+Both are correct as words and need only word-to-digit conversion. The pair form, which is how
+a French mobile number is normally spoken, is as safe as the digit form.
+
+### 8.4 The failure belongs to the take, not the word
+
+An earlier run transcribed "northgate" as "northcate" in five replays out of five, which
+invites the conclusion that the word reliably fails. It does not: a different recording of
+the same word transcribed correctly here. **Replaying one file is deterministic; saying the
+same word again is not.**
+
+That makes contact capture harder rather than easier. An error that reproduces can be found
+by testing. An error that depends on how a caller happened to pronounce a word on the day
+cannot.
+
+### 8.5 What follows for a deployment
+
+The measured position is that a spoken email address is not a safe primary identifier and a
+telephone number is. Where an address must be captured, normalisation is mandatory rather
+than optional, a domain allowlist would repair the `laPost` class outright, and readback is
+the only mechanism that converts a silent failure into a visible one. Three of five addresses
+were wrong in ways only the caller could catch.
+
+## 9. What is not externally observable, and why
 
 `input_audio_buffer.speech_stopped` is emitted **after** the endpointing decision has already
 been taken. In a validated session the server's logged Smart Turn completion and the wire's
@@ -309,10 +458,12 @@ The two are complementary and neither is sufficient. External observation additi
 requires no patch, so it applies unchanged to any released version and to any other server
 implementing the same protocol.
 
-## 8. Threats to validity
+## 10. Threats to validity
 
 1. **Single speaker, single language, single machine, single configuration.** No claim
-   generalises beyond this speaker. Nothing here says anything about French.
+   generalises beyond this speaker. Nothing here says anything about French, which matters
+   most for section 8: one French word in the corpus, "salle des mariages", was transcribed
+   as "salle de mariage" by an English-configured recogniser.
 2. **Replay measures system variance, not population variance** (Section 6.4).
 3. **Four outcome classes never occurred.** No silent turn, held turn, agent-initiated turn or
    tool turn arose in 115 captures, because the corpus was scripted and the session had no
@@ -327,8 +478,16 @@ implementing the same protocol.
    log semantics, one of which is demonstrably not understood.
 8. **Cold start.** TTS real-time factor was 2.25 in steady state against 0.87 during warm-up,
    so early turns in an unwarmed process would not resemble these.
+9. **The tool experiments are small.** Six utterances for invocation, three runs per profile
+   for the routing ablation. The arms were internally stable, and stability at n=3 is not the
+   same as generality.
+10. **One model.** All tool behaviour is Qwen3-4B-Instruct at 4-bit. The parser defect is
+    model-independent, since it discards whatever the model emits, but the *rate* of
+    positional emission and the routing sensitivity are properties of this model.
+11. **Contact capture is measured on one voice** saying each form once. It establishes that
+    the failures exist and are severe, not how frequent they are across callers.
 
-## 9. Conclusions
+## 11. Conclusions
 
 1. **Most of a cascaded latency budget is externally recoverable.** Three of four stages are
    obtained exactly from the public protocol, with no patch and no fork, on a released version.
@@ -342,8 +501,17 @@ implementing the same protocol.
    measurement is correct at all.
 5. **Recorded and replayed human speech makes the measurement both reproducible and
    acoustically valid**, which synthetic speech cannot be for an acoustic endpointer.
+6. **A tool call can be lost after the model gets it right.** Every call in the invocation
+   experiment was correct at the point of generation and discarded in parsing, with the
+   prompt format eliciting the very form that was discarded. The failure is silent from
+   outside: the caller sees an assistant that will not act, with no error anywhere.
+7. **Tool descriptions route better than instructions.** Rewording one description recovered
+   every booking; adding routing instructions on top reversed that, because a rule matching
+   an utterance's surface form beat the tool matching its intent.
+8. **A spoken email address is not a safe identifier and a telephone number is.** No address
+   tested transcribed into a valid form; both spoken number formats survived intact.
 
-## 10. Future work
+## 12. Future work
 
 1. **Per-language endpointing thresholds.** Smart Turn v3.2 applies one global threshold with
    no language conditioning while the default STT declares 25 languages. Published prior art
@@ -357,12 +525,15 @@ implementing the same protocol.
 4. **External reference benchmarks.** These measurements are currently compared only against
    themselves. Full-Duplex-Bench v1.5 and HumDial are the reference points the field
    cross-references.
-5. **Appropriate rather than minimal timing.** Human conversational gaps cluster near 200ms,
+5. **Frequency, not just existence, for the contact failures.** This establishes that they
+   are severe on one voice. A deployment needs a rate across callers, which needs consented
+   recordings rather than a scripted corpus.
+6. **Appropriate rather than minimal timing.** Human conversational gaps cluster near 200ms,
    and delays beyond roughly 700ms are read as signalling a dispreferred response. If timing
    carries pragmatic meaning, the objective is a target offset distribution conditioned on the
    act being performed, not a minimum. That reframes what a latency budget is for.
 
-## 11. Reproduction
+## 13. Reproduction
 
 ```bash
 speech-to-speech serve --mac-optimal-settings --host 127.0.0.1 --port 8765
