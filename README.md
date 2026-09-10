@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.svg">
-  <img alt="apresvous: measuring when a voice agent decides it is your turn. Median time to first audio 1.577 seconds over 115 turns." src="docs/banner-light.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/brijmohan/voice-agent-latency-lab/master/docs/banner-dark.svg">
+  <img alt="apresvous: measuring when a voice agent decides it is your turn. Median time to first audio 1.577 seconds over 115 turns." src="https://raw.githubusercontent.com/brijmohan/voice-agent-latency-lab/master/docs/banner-light.svg" width="100%">
 </picture>
 
 # voice-agent-latency-lab
@@ -133,7 +133,7 @@ at any anchor; the endpointer held on **135 of 275 decisions** and each hold cos
 600ms; and **61% of turns arrive as more than one speech segment**, each revision restating
 the whole utterance and costing LLM work that is then superseded.
 
-Full write-up in [REPORT-speech-to-speech.md](REPORT-speech-to-speech.md).
+Full write-up in [REPORT-speech-to-speech.md](https://github.com/brijmohan/voice-agent-latency-lab/blob/master/REPORT-speech-to-speech.md).
 
 **There is no comparison table between the two stacks, on purpose.** One runs three cloud
 APIs, the other runs fully local on a laptop. That difference dominates any total, so a
@@ -211,7 +211,7 @@ uv run python tools/replay_log.py <logfile>
 
 ## What is next
 
-Milestones and acceptance criteria are in [ROADMAP.md](ROADMAP.md).
+Milestones and acceptance criteria are in [ROADMAP.md](https://github.com/brijmohan/voice-agent-latency-lab/blob/master/ROADMAP.md).
 
 - P90 at n≥100 per configuration, which needs an automated caller.
 - The same decomposition against a second architecture that shares no event model.
@@ -221,7 +221,7 @@ Milestones and acceptance criteria are in [ROADMAP.md](ROADMAP.md).
 
 ## Corrections
 
-Claims made here that turned out to be wrong are recorded in [CORRECTIONS.md](CORRECTIONS.md)
+Claims made here that turned out to be wrong are recorded in [CORRECTIONS.md](https://github.com/brijmohan/voice-agent-latency-lab/blob/master/CORRECTIONS.md)
 rather than quietly edited.
 
 ## Licence
