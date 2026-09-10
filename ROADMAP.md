@@ -57,29 +57,51 @@ cannot see. Endpointing is invisible from outside. Transport is invisible from i
 **Acceptance, met:** the same four stages are reported for both stacks, and every stage that
 cannot be measured on one of them is named as unmeasured rather than estimated.
 
-## v0.3  Calibration for a real deployment
+## v0.3  Does one global endpointing threshold work in more than one language?
 
 `speech-to-speech` applies Smart Turn v3.2 with a single global threshold and no language or
 speaker conditioning, while its default STT declares 25 languages. LiveKit ships per-language
 thresholds for the same task, and `livekit/eot-bench` (Apache-2.0, 14 languages) evaluates
-Smart Turn among others, so the concern has public prior art.
+Smart Turn among others. Published work on voice activity projection reports that monolingual
+models do not transfer across languages.
 
-A caller who pauses mid-sentence gets cut off. In a municipal front office that is most of
-the callers.
+Everything measured in this repository so far is English. The one French phrase that appeared
+in the corpus, *salle des mariages*, came back as *salle de mariage*. That is a warning, not
+a result.
+
+### v0.3a  A parallel French corpus, self-recorded
+
+The cheap half, and it comes first because it is not blocked on anything.
+
+- [ ] Record the same 23 utterance functions in French, same speaker, same microphone,
+      **same block IDs**, so each French utterance pairs with its English counterpart.
+- [ ] Report hold rate, hold cost and TTFA per block, per language.
+- [ ] Report the Smart Turn probability distribution per language. The English corpus gives
+      0.923 median when complete and 0.028 when incomplete, decisively separated. **Whether
+      that separation survives in French is the whole question.**
+
+**Why self-recorded beats real calls for this specific question.** Matched utterance
+functions control for content, so a difference between the two runs is attributable to
+language rather than to what was said. Real calls cannot offer that, and would confound the
+one variable being tested.
+
+**Acceptance:** a per-language table on identical utterance functions, and a stated answer to
+whether a single threshold is defensible across the two.
+
+### v0.3b  Real consented calls
+
+The deployment-grade half, gated on consent and a completed DPIA, answering a different
+question: what real callers do, as opposed to what one speaker can produce on request.
 
 - [ ] Annotate true end-of-turn points on a consented set of French municipal calls.
 - [ ] Sweep the threshold and report **cutoff rate against added latency as a curve**, not a
-      single operating point. Both halves are real costs and they trade against each other.
-- [ ] Report the result per caller profile, since the whole question is whether one global
-      number can serve a heterogeneous population.
-- [ ] Send anything that generalises upstream as a PR.
-
-**Acceptance:** a stated operating point with the cost of choosing it, and a procedure
-someone else can run on their own callers.
+      single operating point.
+- [ ] Report per caller profile, since the question is whether one global number can serve a
+      heterogeneous population.
 
 **On the data.** Real call audio never leaves the deployment and is never published. What
 gets published is the annotation protocol, the schema, and a synthetic set generated with
-TTS. A method that only works if you have the private audio is not a contribution.
+TTS. A method that only works if you hold the private audio is not a contribution.
 
 ## v0.4  Latency as a regression gate
 
