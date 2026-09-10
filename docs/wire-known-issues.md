@@ -1,4 +1,7 @@
 # Known issues, before any of this is published
+
+*Defects found in the systems being measured, rather than in this harness, are in
+[upstream-findings.md](upstream-findings.md).*
 *8 Sep 2026. `apresvous/wire_correlator.py` passes 10 tests plus 1 xfail over 115 real captures.*
 
 Ordered by what would embarrass you first.
