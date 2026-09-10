@@ -1,0 +1,45 @@
+name: tests
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      # The livekit extra is needed because the in-framework correlator and the sink import
+      # livekit.agents. The wire harness does not, which is the point of the split, and the
+      # lean-import test below proves that separation still holds.
+      - run: uv sync --extra livekit --python ${{ matrix.python }}
+
+      - name: ruff
+        run: uv run ruff check .
+
+      - name: tests
+        run: uv run pytest tests/ -q
+
+      - name: the lean path must not pull in what it does not need
+        run: |
+          uv run python - <<'PY'
+          import sys
+          import apresvous.capture, apresvous.cli, apresvous.report, apresvous.wire_correlator
+          heavy = sorted({m.split(".")[0] for m in sys.modules}
+                         & {"livekit", "speech_to_speech"})
+          assert not heavy, f"lean import path pulled in {heavy}"
+          print("lean path clean")
+          PY

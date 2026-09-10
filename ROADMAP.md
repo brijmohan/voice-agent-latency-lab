@@ -83,6 +83,10 @@ TTS. A method that only works if you have the private audio is not a contributio
 
 ## v0.4  Latency as a regression gate
 
+- [x] CI on every push: ruff, the full suite on 3.12 and 3.13, and a guard that the lean
+      import path stays free of `livekit` and `speech_to_speech`.
+- [x] Releases gated on those tests, published to PyPI by Trusted Publishing so no API token
+      exists anywhere.
 - [ ] Run the harness in CI over the committed fixtures.
 - [ ] Fail the build when P50 TTFA regresses past a stated budget.
 

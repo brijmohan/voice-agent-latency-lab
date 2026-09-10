@@ -1,0 +1,60 @@
+name: publish
+
+# Publishing is deliberately manual: it runs when a GitHub Release is published, never on a
+# push. A version number on PyPI can never be reused, so the trigger should be an act of
+# intent rather than a side effect of merging.
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - run: uv sync --extra livekit
+      - name: tests must pass before anything is published
+        run: |
+          uv run ruff check .
+          uv run pytest tests/ -q
+
+      - run: uv build
+
+      - name: the tag must match the version being published
+        run: |
+          version=$(uv run python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "release tag '$tag' does not match pyproject version '$version'" >&2
+            exit 1
+          fi
+          echo "publishing version $version"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Trusted Publishing. PyPI verifies a short-lived OIDC token proving this workflow, in
+    # this repository, produced these files. No API token exists, so there is no long-lived
+    # credential to leak, rotate, or leave on a laptop.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/apresvous
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@v1.14.2

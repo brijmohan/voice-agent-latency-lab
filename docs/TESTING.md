@@ -52,8 +52,11 @@ proves they are representable and proves nothing about how they behave in the wi
 **Barge-in.** Zero occurrences. The grouping assigns interrupting speech to the next turn,
 which is reasoned rather than measured.
 
-**CI.** Nothing runs on push yet. `ROADMAP.md` v0.4 covers the latency regression gate, and
-until that exists these tests only run when someone remembers.
+**A latency regression gate.** `.github/workflows/ci.yml` runs ruff, the full suite on
+Python 3.12 and 3.13, and a check that the lean import path still pulls in neither `livekit`
+nor `speech_to_speech`, which is the property the dependency split exists to provide and the
+easiest one to break by accident. What it does not do is fail the build when P50 TTFA
+regresses past a budget. That is `ROADMAP.md` v0.4 and it is still open.
 
 **Public benchmarks.** Not attempted. Full-Duplex-Bench v1.5 (arXiv 2507.23159) and HumDial
 (ICASSP 2026) are the two the field actually cross-references, and adopting them would let
