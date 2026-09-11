@@ -59,19 +59,32 @@ someone else reports the same defect, or an upstream release touches this code p
 
 ## 2. `signature_from_schema` rejects a valid JSON Schema
 
-**System:** same. **Severity:** low, and it has a trivial workaround.
-**Status:** reproduced, not written up, not filed.
+**System:** same. **Severity:** low, with a trivial workaround.
+**Status: already reported and fixed upstream by someone else.** Open PR
+[#384](https://github.com/huggingface/speech-to-speech/pull/384), *Fix tool signature
+parameter ordering*, opened 29 July 2026. Not our finding to claim.
 
 It builds an `inspect.Signature` by iterating `properties` in declaration order and assigning
 defaults to anything not required. Python forbids a non-default parameter after a defaulted
-one, so a schema listing an optional property *before* a required one raises:
+one, so a schema listing an optional property *before* a required one raises
+`ValueError: non-default argument follows default argument`. The schema is valid; JSON Schema
+has no ordering requirement.
 
-```
-ValueError: non-default argument follows default argument
-```
+### Why it matters to finding 1
 
-The schema is valid; JSON Schema has no ordering requirement. Any tool whose properties
-happen to be declared in that order cannot be rendered into a prompt at all.
+#384 fixes this by **reordering** parameters: required-without-default are moved ahead of
+defaulted ones so the signature is valid Python.
 
-Deserves its own issue rather than being bundled with finding 1, since bundling would widen
-that review for an unrelated cause.
+That silently breaks a naive version of finding 1's fix. If positional arguments are bound by
+schema declaration order, then once #384 lands the model is shown `search(query, limit=None)`,
+answers `search("hello", 10)` meaning `query="hello"`, and the binding assigns
+`limit="hello"` and `query=10`. Wrong values, no error.
+
+The fix on our branch therefore takes its order from `signature_from_schema` itself, the same
+function that renders the signature the model sees, so the two cannot diverge. Where it
+raises, which is precisely the case #384 addresses, the model was never shown a signature and
+declaration order is the only order available.
+
+**Lesson worth keeping:** a fix that depends on another component's ordering should call that
+component rather than reimplement its assumptions. Checking open PRs before proposing a
+change found this; reading the code alone would not have.
